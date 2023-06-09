@@ -6,3 +6,6 @@ Model/*
 Result/*.txt
 *.pyc
 nohup.out
+Pipfile
+Pipfile.lock
+pyzed*
