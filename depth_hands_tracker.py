@@ -10,9 +10,8 @@ from model import PixelwiseRegression
 from utils import load_model, select_gpus
 
 class Depth_Hands_Tracker():
-    def __init__(self, model_name, model_parameters, skeleton_mode, gpu_id):
+    def __init__(self, model_name, model_parameters, gpu_id):
 
-        self.skeleton_mode = skeleton_mode
         self.label_size = model_parameters["label_size"]
 
         select_gpus(gpu_id)
@@ -24,18 +23,17 @@ class Depth_Hands_Tracker():
 
 
 
-    def draw_skeleton(self, _img, hand_index, *, output_size_ratio=1,rP = 8, linewidth = 4, draw=False):
+    def draw_skeleton(self, _img, joints, *, output_size=512, rP = 8, linewidth = 4, draw=False, skeleton_mode=0):
 
-        joints = self.uvd[hand_index,:,:2]
         fig, axes = plt.subplots(figsize=(4, 4))
-        if self.skeleton_mode == 0:
+        if skeleton_mode == 0:
             Index = [0, 1, 2, 3, 4]
             Mid = [0, 5, 6, 7, 8]
             Ring = [0, 9, 10, 11, 12]
             Small = [0, 13, 14, 15, 16]
             Thumb = [0, 17, 18, 19, 20]
             config = [Thumb, Index, Mid, Ring, Small]
-        elif self.skeleton_mode == 1:
+        elif skeleton_mode == 1:
             Index = [0, 2, 9, 10, 11]
             Mid = [0, 3, 12, 13, 14]
             Ring = [0, 4, 15, 16, 17]
@@ -43,9 +41,9 @@ class Depth_Hands_Tracker():
             Thumb = [0, 1, 6, 7, 8]
             config = [Thumb, Index, Mid, Ring, Small]
 
-        input_img_shape = np.shape(_img)
-        img = cv.resize(_img, input_img_shape[:2]*output_size_ratio)
-        img3D = np.zeros((input_img_shape[0], input_img_shape[1], 3))
+        np.shape(_img)
+        img = cv.resize(_img, (output_size, output_size))
+        img3D = np.zeros((img.shape[0], img.shape[1], 3))
         for i in range(3):
             img3D[:, :, i] = img
         is_hand = img3D != 0
@@ -70,21 +68,16 @@ class Depth_Hands_Tracker():
 
     def estimate(self, img):
         
-        #input_img_shape = np.shape(img)
-        print("###\tType of img : ", type(img), "\tShape of img : ", np.shape(img))
-        print("###\tType of self.label_size = ", type(self.label_size))
         label_img = Resize(size=[self.label_size, self.label_size])(img)
         label_img = tr.reshape(label_img, (1, 1, self.label_size, self.label_size))
-        mask = (label_img[0, 0, :, :] > 0).to(dtype=label_img.dtype)
+        mask = tr.where(label_img > 0, 1.0, 0.0)
+
         
         img = img.to(self.device, non_blocking=True)
         label_img = label_img.to(self.device, non_blocking=True)
         mask = mask.to(self.device, non_blocking=True)
-        print("\n###\tmemory_allocated = ", tr.cuda.memory_allocated())
-        print("###\tmax_memory_allocated = ", tr.cuda.max_memory_allocated())
-        print("###\tmemory_reserved = ", tr.cuda.memory_reserved())
-        print("###\tmax_memory_reserved = ", tr.cuda.max_memory_reserved())
-        self.heatmaps, self.depthmaps, hands_uvd = self.model(img, label_img, mask)
+
+        self.heatmaps, self.depthmaps, hands_uvd = self.model(img, label_img, mask)[-1]
         hands_uvd = hands_uvd.detach().cpu().numpy()
         self.hands_uvd = hands_uvd
 

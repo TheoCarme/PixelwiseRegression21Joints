@@ -31,17 +31,17 @@ class RGB_Hands_Tracker():
 
 
 
-    def draw_and_export_data(self, image, draw=1, export=1, height=1080, width=1920) :
+    def draw_and_export_data(self, image, draw=True, export=True, height=1080, width=1920) :
     
     
         def landmarks_list_to_array(landmark_list, image_shape, denormalization):
           
             if denormalization :
-                rows, cols, _ = image_shape
-                return np.asarray([(lmk.x * cols, lmk.y * rows, lmk.z)
+                cols, rows, _ = image_shape
+                return np.asarray([(lmk.y * rows, lmk.x * cols, lmk.z)
                              for lmk in landmark_list.landmark])
             else :
-                return np.asarray([(lmk.x, lmk.y, lmk.z)
+                return np.asarray([(lmk.y, lmk.x, lmk.z)
                              for lmk in landmark_list.landmark])                
             
         
