@@ -24,11 +24,18 @@ import numpy as np
 import cv2 as cv
 import torch as tr
 from matplotlib import pyplot as plt
+import scipy
 import pyzed.sl as sl
 # python -m pip install --ignore-installed /home/labcom/Documents/PixelwiseRegression/pyzed-4.0-cp310-cp310-linux_x86_64.whl
 
 from rgb_hands_tracker import RGB_Hands_Tracker
 from depth_hands_tracker import Depth_Hands_Tracker
+from utils import center_crop, norm_img
+
+PIXEL_SIZE_2K = 0.002
+PIXEL_SIZE_1080 = 0.002
+PIXEL_SIZE_720 = 0.004
+PIXEL_SIZE_WVGA = 0.008
 
 def make_parser():
     parser = argparse.ArgumentParser("hands tracking")
@@ -256,13 +263,15 @@ def compute_palms_cross_products(hands_pts, display=False) :
 
 
 
-def get_hands_close_up(depth_img, hands_landmarks, display=False, clean=False) :
+def get_hands_close_up(bgr_img, depth_img, hands_landmarks, display=False, clean=False) :
     
     img_shape = np.shape(depth_img)
     nb_hands = np.shape(hands_landmarks)[0]
         
-    hands_frames = np.zeros((nb_hands, 4), dtype=np.int32)
-    hands_close_up = np.zeros((nb_hands, 128, 128), dtype=np.float32)
+    hands_frames = np.zeros((nb_hands, 6), dtype=np.int32)
+    depth_hands_close_up = np.zeros((nb_hands, 128, 128), dtype=np.float32)
+    bgr_hands_close_up = np.zeros((nb_hands, 128, 128, 3), dtype=np.uint8)
+    norm_hands_close_up = np.zeros((nb_hands, 128, 128), dtype=np.float32)
 
     if clean :
         depth_img = np.where((depth_img == -np.inf) | (depth_img == np.inf) | (depth_img != depth_img), 0, depth_img)
@@ -284,24 +293,70 @@ def get_hands_close_up(depth_img, hands_landmarks, display=False, clean=False) :
         hands_frames[idx, 3] = 128/hands_frames[idx, 2]
 
         end = origin + hands_frames[idx, 2]
-        hands_close_up[idx] = cv.resize(depth_img[hands_frames[idx, 0] : end[0], hands_frames[idx, 1] : end[1]], (128, 128), interpolation = cv.INTER_AREA)
-        # hand_depth_img = np.reshape(hand_depth_img, (hands_frames[idx, 2], hands_frames[idx, 2]))
-        
+        hand_close_up = depth_img[hands_frames[idx, 0] : end[0], hands_frames[idx, 1] : end[1]]
+        depth_hands_close_up[idx] = cv.resize(hand_close_up, (128, 128), interpolation = cv.INTER_AREA)
+        bgr_hands_close_up[idx] = cv.resize(bgr_img[hands_frames[idx, 0] : end[0], hands_frames[idx, 1] : end[1]], (128, 128), interpolation = cv.INTER_AREA)
+
         if display :
-            dist = hands_close_up[idx].astype(np.uint8)
+            dist = depth_hands_close_up[idx].astype(np.uint8)
             dist = cv.applyColorMap(dist, cv.COLORMAP_RAINBOW)
             cv.imshow("Hand close-up on the depth frame", dist)
+            cv.imshow("Hand close-up on the bgr frame", bgr_hands_close_up[idx])
             cv.waitKey()
 
-    return hands_close_up, hands_frames
+        hand_close_up, min_value, scale = norm_img(hand_close_up)
+        hands_frames[idx, 4:6] = min_value, scale
+        norm_hands_close_up[idx] = cv.resize(hand_close_up, (128, 128), interpolation = cv.INTER_AREA)
+        
+    return bgr_hands_close_up, depth_hands_close_up, norm_hands_close_up, hands_frames
 
 
 
-def get_full_size_uvd(hand_frames, depth_hand_landmarks) :
+def get_cropped_and_normalized_hands(hand_close_up, focal_length, cube_size=150, display=False) :
 
-    print("\n###\tShape of depth_hand_landmarks : ", np.shape(depth_hand_landmarks), "\n###\tdepth_hand_landmarks = ", depth_hand_landmarks)
-    depth_hand_landmarks[:, :2] = depth_hand_landmarks[:, :2] / hand_frames[3]
+    print("\n###\tShape of hand close up : ", np.shape(hand_close_up), "\n###\thand close up = ", hand_close_up)
+    mean = np.mean(hand_close_up[hand_close_up > 0])
+    com = scipy.ndimage.measurements.center_of_mass(hand_close_up > 0)
+    com = np.array([com[1], com[0], mean])
+    print("\n###\tMean = ", mean, "\tCOM = ", com)
+    # crop the image
+    du = cube_size / com[2] * focal_length[0]
+    dv = cube_size / com[2] * focal_length[1]
+    box_size = int(du + dv)
 
+    print("\n###\tdu = ", du, "\tdv = ", dv, "\tbox_size = ", box_size)
+    box_size = max(box_size, 2)
+
+    hand_close_up = center_crop(hand_close_up, (com[1], com[0]), box_size)
+    hand_close_up = hand_close_up * np.logical_and(hand_close_up > com[2] - cube_size, hand_close_up < com[2] + cube_size)
+
+    # norm the image and uvd to COM
+    hand_close_up[hand_close_up > 0] -= com[2] # center the depth image to COM
+
+    com[0] = int(com[0])
+    com[1] = int(com[1])
+
+    box_size = hand_close_up.shape[0] # update box_size
+
+
+    if display :
+        dist = hand_close_up.astype(np.uint8)
+        dist = cv.applyColorMap(dist, cv.COLORMAP_RAINBOW)
+        cv.imshow("Hand close-up on the depth frame", dist)
+        cv.waitKey()
+
+    return hand_close_up, box_size
+
+
+
+def get_full_size_uvd(hands_frames, depth_hands_landmarks, resolution) :
+
+    for hand_frame, depth_hand_landmarks in zip(hands_frames, depth_hands_landmarks) :
+
+        depth_hand_landmarks[:, :2] = (depth_hand_landmarks[:, :2] + 1) / 2 * 128
+        depth_hand_landmarks[:, 2] = (depth_hand_landmarks[:, 2] + 1) * hand_frame[5] / 2 + hand_frame[4]
+        
+    return depth_hands_landmarks.astype(np.int32)
 
 
 
@@ -356,7 +411,7 @@ if __name__ == "__main__":
     # Create a InitParameters object and set configuration parameters
     init_params = sl.InitParameters()
     init_params.camera_resolution = sl.RESOLUTION.HD1080  # Use HD1080 video mode
-    init_params.coordinate_units = sl.UNIT.CENTIMETER          # Set coordinate units
+    init_params.coordinate_units = sl.UNIT.MILLIMETER          # Set coordinate units
     init_params.depth_mode = sl.DEPTH_MODE.NEURAL
     init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP
     
@@ -367,7 +422,9 @@ if __name__ == "__main__":
 
     # Get ZED camera information
     camera_info = zed.get_camera_information()
-
+    left_focal = np.array([camera_info.camera_configuration.calibration_parameters.left_cam.fx, camera_info.camera_configuration.calibration_parameters.left_cam.fy])*PIXEL_SIZE_1080
+    right_focal = np.array([camera_info.camera_configuration.calibration_parameters.right_cam.fx, camera_info.camera_configuration.calibration_parameters.right_cam.fy])*PIXEL_SIZE_1080
+    
     # 2D viewer utilities
     display_resolution = sl.Resolution(min(camera_info.camera_configuration.resolution.width, 1920), min(camera_info.camera_configuration.resolution.height, 1080))
     image_scale = [display_resolution.width / camera_info.camera_configuration.resolution.width
@@ -395,11 +452,6 @@ if __name__ == "__main__":
             depth_ocv = depth.get_data()
             point_cloud_np = point_cloud.get_data()
 
-            print("\n###\tmemory_allocated = ", tr.cuda.memory_allocated())
-            print("###\tmax_memory_allocated = ", tr.cuda.max_memory_allocated())
-            print("###\tmemory_reserved = ", tr.cuda.memory_reserved())
-            print("###\tmax_memory_reserved = ", tr.cuda.max_memory_reserved())
-
             left_frame_ocv = cv.cvtColor(left_frame_ocv, cv.COLOR_BGRA2BGR)
 
             # Ask the hands tracker to do detection and/or tracking of the hands on the current frame.
@@ -412,17 +464,23 @@ if __name__ == "__main__":
 
             if np.count_nonzero(hands_scores) :
 
-                hands_close_up, hands_frames = get_hands_close_up(depth_ocv, hands_landmarks, clean=True)
-                depth_hands_landmarks = np.empty(np.shape(hands_landmarks))
+                bgr_hands_close_up, hands_close_up, norm_hands_close_up, hands_frames = get_hands_close_up(left_frame_ocv, depth_ocv, hands_landmarks, clean=True, display=True)
+                depth_hands_landmarks = np.zeros(np.shape(hands_landmarks), dtype=np.float32)
 
-                for idx, hand_close_up in enumerate(hands_close_up) :
-                    hand_close_up = np.array([[hand_close_up]])
-                    hand_close_up_tr = tr.as_tensor(hand_close_up, device=tr.device('cuda'))
-                    depth_hands_landmarks[idx] = depth_hands_tracker.estimate(hand_close_up_tr)
-                    # depth_hands_landmarks[idx] = get_full_size_uvd(hands_frames, depth_hands_landmarks[idx])
-                    hand_close_up = depth_hands_tracker.draw_skeleton(hand_close_up[0, 0], depth_hands_landmarks[idx, :, :2], skeleton_mode=skeleton_mode)
-                    hand_close_up = np.clip(hand_close_up, 0, 1)
-                    cv.imshow("[HANDS TRACKING ON THE DEPTH FRAMES]   Press \'q\' to quit  /  Press \'p\' to play/pause  /  Press \'n\' to print the measured norms of the phalanxes  /  Press \'c\' to print the cross products of the palm  /  Press \'w\' to print the world coordinates of the hands", hand_close_up)
+                for idx, norm_hand_close_up in enumerate(norm_hands_close_up) :
+                    norm_hand_close_up = np.array([[norm_hand_close_up]])
+                    norm_hand_close_up_tr = tr.as_tensor(norm_hand_close_up, device=tr.device('cuda'))
+                    depth_hands_landmarks[idx] = depth_hands_tracker.estimate(norm_hand_close_up_tr)
+                
+                depth_hands_landmarks = get_full_size_uvd(hands_frames, depth_hands_landmarks, [1080, 1920])
+                print("\n###[MAIN]\tShape of depth_hands_landmarks : ", np.shape(depth_hands_landmarks), "\n###\tdepth_hands_landmarks = ", depth_hands_landmarks)
+
+                for bgr_hand_close_up, depth_hand_landmarks in zip(bgr_hands_close_up, depth_hands_landmarks) :
+                    print("\n###[MAIN]\tShape of bgr close-up : ", np.shape(bgr_hand_close_up[idx]), "\n###\tBGR close-up : ", bgr_hand_close_up[idx])
+                    hand_close_up_512 = depth_hands_tracker.draw_skeleton(bgr_hand_close_up, depth_hand_landmarks[:, :2], skeleton_mode=skeleton_mode)
+                    # hand_close_up_512 = np.clip(hand_close_up_512, 0, 1)
+            
+                    cv.imshow("[HANDS TRACKING ON THE DEPTH FRAMES]   Press \'q\' to quit  /  Press \'p\' to play/pause  /  Press \'n\' to print the measured norms of the phalanxes  /  Press \'c\' to print the cross products of the palm  /  Press \'w\' to print the world coordinates of the hands", hand_close_up_512)
 
                 # camera_hands_landmarks = get_points_of_landmarks_camera_z(hands_landmarks, depth_ocv, True)
                 # camera_hands_landmarks_pts = get_point_cloud_of_hands(hands_landmarks, point_cloud_np)
@@ -438,30 +496,30 @@ if __name__ == "__main__":
                 elif key == ord('p') :
                     while True :
                         button = cv.waitKey(1)
-                        if button == ord('n'):
+                        # if button == ord('n'):
                             #phalanx_size = measure_phalanxes(camera_hands_landmarks_pts, True)
-                            phalanx_size = measure_phalanxes(mediapipe_hands_landmarks_pts, True)
-                        elif button == ord('c'):
+                            # phalanx_size = measure_phalanxes(mediapipe_hands_landmarks_pts, True)
+                        # elif button == ord('c'):
                             #palm_cross_products = compute_palms_cross_products(camera_hands_landmarks_pts, True)
-                            palm_cross_products = compute_palms_cross_products(mediapipe_hands_landmarks_pts, True)
-                        elif button == ord('w'):
-                            print("\n[MAIN]\tPixel coordinates of the hands with depth : ", camera_hands_landmarks)
-                            print("[MAIN]\tWorld coordinates of the hands with camera z : ", camera_hands_landmarks_pts)
-                            print("[MAIN]\tGeometric centers : ", geometric_centers)
-                            print("[MAIN]\tWorld coordinates of the hands with mediapipe z : ", mediapipe_hands_landmarks_pts)
-                        elif button == ord('p'):
+                            # palm_cross_products = compute_palms_cross_products(mediapipe_hands_landmarks_pts, True)
+                        # elif button == ord('w'):
+                            # print("\n[MAIN]\tPixel coordinates of the hands with depth : ", camera_hands_landmarks)
+                            # print("[MAIN]\tWorld coordinates of the hands with camera z : ", camera_hands_landmarks_pts)
+                            # print("[MAIN]\tGeometric centers : ", geometric_centers)
+                            # print("[MAIN]\tWorld coordinates of the hands with mediapipe z : ", mediapipe_hands_landmarks_pts)
+                        if button == ord('p'):
                             break
-                elif key == ord('n'):
-                    #phalanx_size = measure_phalanxes(camera_hands_landmarks_pts, True)
-                    phalanx_size = measure_phalanxes(mediapipe_hands_landmarks_pts, True)
-                elif key == ord('c'):
-                    #palm_cross_products = compute_palms_cross_products(camera_hands_landmarks_pts, True)
-                    palm_cross_products = compute_palms_cross_products(mediapipe_hands_landmarks_pts, True)
-                elif key == ord('w'):
-                    print("\n[MAIN]\tPixel coordinates of the hands with depth : ", camera_hands_landmarks)
-                    print("[MAIN]\tWorld coordinates of the hands with camera z : ", camera_hands_landmarks_pts)
-                    print("[MAIN]\tGeometric centers : ", geometric_centers)
-                    print("[MAIN]\tWorld coordinates of the hands with mediapipe z : ", mediapipe_hands_landmarks_pts)
+                # elif key == ord('n'):
+                    # phalanx_size = measure_phalanxes(camera_hands_landmarks_pts, True)
+                    # phalanx_size = measure_phalanxes(mediapipe_hands_landmarks_pts, True)
+                # elif key == ord('c'):
+                    # palm_cross_products = compute_palms_cross_products(camera_hands_landmarks_pts, True)
+                    # palm_cross_products = compute_palms_cross_products(mediapipe_hands_landmarks_pts, True)
+                # elif key == ord('w'):
+                    # print("\n[MAIN]\tPixel coordinates of the hands with depth : ", camera_hands_landmarks)
+                    # print("[MAIN]\tWorld coordinates of the hands with camera z : ", camera_hands_landmarks_pts)
+                    # print("[MAIN]\tGeometric centers : ", geometric_centers)
+                    # print("[MAIN]\tWorld coordinates of the hands with mediapipe z : ", mediapipe_hands_landmarks_pts)
 
                 # if key == ord('s'):
                 #     plt.imsave(os.path.join("skeleton", args.dataset, "predict", "{}.jpg".format((datetime.datetime.now()).strftime("%f"))), skeleton_pre)
