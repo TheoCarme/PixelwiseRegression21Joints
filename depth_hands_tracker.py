@@ -23,7 +23,7 @@ class Depth_Hands_Tracker():
 
 
 
-    def draw_skeleton(self, _img, joints, *, output_size=512, rP = 8, linewidth = 4, draw=False, skeleton_mode=0):
+    def draw_skeleton(self, img, landmarks, output_size=512, rP = 4, linewidth = 2, draw=False, skeleton_mode=0):
 
         fig, axes = plt.subplots(figsize=(4, 4))
         if skeleton_mode == 0:
@@ -41,30 +41,27 @@ class Depth_Hands_Tracker():
             Thumb = [0, 1, 6, 7, 8]
             config = [Thumb, Index, Mid, Ring, Small]
 
-        np.shape(_img)
-        img = cv.resize(_img, (output_size, output_size))
-        img3D = np.zeros((img.shape[0], img.shape[1], 3))
-        for i in range(3):
-            img3D[:, :, i] = img
-        is_hand = img3D != 0
-        img3D = img3D / np.max(img3D)
-        # img3D = img3D * 0.5 + 0.25
-        img3D = 1 - img3D
-        img3D[is_hand] *= 0.5
-        joints = joints * (img.shape[0] - 1) + np.array([img.shape[0] // 2, img.shape[0] // 2])
-        _joint = [(int(joints[i][0]), int(joints[i][1])) for i in range(joints.shape[0])]
-        colors = [(1, 0, 0), (0.5, 0.5, 0), (0, 1, 0), (0, 0.5, 0.5), (0, 0, 1)]
-        for i in range(5):
-            for index in config[i]:
-                cv.circle(img3D, _joint[index], rP, colors[i], -1)
-            for j in range(len(config[i]) - 1):
-                cv.line(img3D, _joint[config[i][j]], _joint[config[i][j+1]], colors[i], linewidth)
+        # img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+
+        colors = [(255, 0, 0), (128, 128, 0), (0, 255, 0), (0, 128, 128), (0, 0, 255)]
+
+        for idx, finger in enumerate(config) :
+
+            for joint in finger :
+                cv.circle(img, landmarks[joint], rP, colors[idx], -1)
+            for phalanx in range(len(finger) - 1):
+                cv.line(img, landmarks[finger[phalanx]], landmarks[finger[phalanx+1]], colors[idx], linewidth)
+
+        img  = cv.resize(img, (output_size, output_size))
+
         if draw:
-            axes.imshow(img3D)
+            axes.imshow(img)
             axes.axis("off")
             plt.show()
         else:
-            return img3D
+            return img
+            
+
 
     def estimate(self, img):
         
@@ -76,6 +73,11 @@ class Depth_Hands_Tracker():
         img = img.to(self.device, non_blocking=True)
         label_img = label_img.to(self.device, non_blocking=True)
         mask = mask.to(self.device, non_blocking=True)
+
+        print("\n###\tmemory_allocated = ", tr.cuda.memory_allocated())
+        print("###\tmax_memory_allocated = ", tr.cuda.max_memory_allocated())
+        print("###\tmemory_reserved = ", tr.cuda.memory_reserved())
+        print("###\tmax_memory_reserved = ", tr.cuda.max_memory_reserved())
 
         self.heatmaps, self.depthmaps, hands_uvd = self.model(img, label_img, mask)[-1]
         hands_uvd = hands_uvd.detach().cpu().numpy()

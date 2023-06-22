@@ -229,7 +229,7 @@ def filte_img(img):
 
 def norm_img(img):
     value = img[img > 0]
-    mean = np.mean(value)
+    # mean = np.mean(value)
     max_value = np.max(value)
     min_value = np.min(value)
     scale = max_value - min_value

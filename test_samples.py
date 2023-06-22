@@ -179,8 +179,11 @@ if __name__ == '__main__':
         img, label_img, mask, box_size, cube_size, com, uvd, heatmaps, depthmaps = batch
         
         img = img.to(device, non_blocking=True)
+        print("\n###\tShape of img : ", np.shape(img), "\tType of img : ", type(img), "\tDtype of img : ", img.dtype, "\tmin de img = ", torch.min(img), "\tmean de img = ", torch.mean(img), "\tmax de img = ", torch.max(img), "\timg[63, 63] = ", img[0, 0, 63, 63], "\n###\timg = ", img)
         label_img = label_img.to(device, non_blocking=True)
+        print("\n###\tShape of label_img : ", np.shape(label_img), "\tType of label_img : ", type(label_img), "\tDtype of label_img : ", label_img.dtype, "\tmin de label_img = ", torch.min(label_img), "\tmean de label_img = ", torch.mean(label_img), "\tmax de label_img = ", torch.max(label_img), "\tlabel_img[31, 31] = ", label_img[0, 0, 31, 31], "\n###\tlabel_img = ", label_img)
         mask = mask.to(device, non_blocking=True)
+        print("\n###\tShape of mask : ", np.shape(mask), "\tType of mask : ", type(mask), "\tDtype of mask : ", mask.dtype, "\tmin de mask = ", torch.min(mask), "\tmask[31, 31] = ", mask[0, 0, 31, 31], "\n###\tmask = ", mask)
 
         results = model(img, label_img, mask)
 
@@ -190,6 +193,7 @@ if __name__ == '__main__':
         img = img.cpu().numpy()
         uvd = uvd.numpy()
 
+        print("\n###\tShape of _uvd : ", np.shape(_uvd), "\tType of _uvd : ", type(_uvd), "\tDtype of _uvd : ", _uvd.dtype, "\n###\t_uvd = ", _uvd)
         skeleton_gt = draw_skeleton(img[0,0], uvd[0,:,:2], skeleton_mode=skeleton_mode)
         skeleton_pre = draw_skeleton(img[0,0], _uvd[0,:,:2], skeleton_mode=skeleton_mode)
         skeleton_gt = np.clip(skeleton_gt, 0, 1)
