@@ -7,7 +7,7 @@ import os
 import cv2 as cv
 
 from model import PixelwiseRegression
-from utils import load_model, select_gpus
+from utils import load_model, select_gpus, recover_uvd
 
 class Depth_Hands_Tracker():
     def __init__(self, model_name, model_parameters, gpu_id):
@@ -63,7 +63,7 @@ class Depth_Hands_Tracker():
             
 
 
-    def estimate(self, img):
+    def estimate(self, img, box_size=None, com=[None, None], cube_size=None):
         
         label_img = Resize(size=[self.label_size, self.label_size])(img)
         label_img = tr.reshape(label_img, (1, 1, self.label_size, self.label_size))
@@ -80,6 +80,10 @@ class Depth_Hands_Tracker():
         print("###\tmax_memory_reserved = ", tr.cuda.max_memory_reserved())
 
         self.heatmaps, self.depthmaps, hands_uvd = self.model(img, label_img, mask)[-1]
+        print("\n###[MAIN]\tShape of hands_uvd : ", np.shape(hands_uvd), "\n###\thands_uvd = ", hands_uvd)
+        if box_size :
+            hands_uvd = recover_uvd(hands_uvd, box_size, com, cube_size)
+
         hands_uvd = hands_uvd.detach().cpu().numpy()
         self.hands_uvd = hands_uvd
 

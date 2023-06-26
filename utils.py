@@ -169,7 +169,10 @@ def center_crop(img, center, window):
     u = int(u)
     v = int(v)
     shift = window // 2
-    dimg = np.pad(img, ((shift, shift), (shift, shift)), "constant", constant_values=0)
+    if len(img.shape) < 3 :
+        dimg = np.pad(img, ((shift, shift), (shift, shift)), "constant", constant_values=0)
+    else :
+        dimg = np.pad(img, ((shift, shift), (shift, shift), (0, 0)), "constant", constant_values=0)
     return dimg[u:u+2*shift, v:v+2*shift]
 
 def cropimg(imgs, features, predict_us, predict_vs, output_channel, img_window=24):
