@@ -30,7 +30,8 @@ class Depth_Hands_Tracker():
     def get_cropped_and_normalized_hands(self, depth_hand_close_up) :
 
         cube_size = self.cube_size
-        
+        print("\n###\tShape of depth_hand_close_up : ", np.shape(depth_hand_close_up), "\\type of depth_hand_close_up : ",\
+              type(depth_hand_close_up), "\ndepth_hand_close_up = ", depth_hand_close_up)
         mean = np.mean(depth_hand_close_up[depth_hand_close_up > 0])
         _com = scipy.ndimage.measurements.center_of_mass(depth_hand_close_up > 0)
         _com = np.array([_com[1], _com[0], mean])
@@ -54,6 +55,8 @@ class Depth_Hands_Tracker():
         com[1] = int(com[1])
         box_size = crop_img.shape[0] # update box_size
 
+        print("\n###\tShape of crop_img : ", np.shape(crop_img), "\\type of crop_img : ",\
+              type(crop_img), "\crop_img = ", crop_img)
         # resize the image and uvd
         try:
             img_resize = cv.resize(crop_img, (128, 128))
@@ -100,6 +103,7 @@ class Depth_Hands_Tracker():
               "\n###\tmax_memory_reserved = ", tr.cuda.max_memory_reserved())
 
         self.heatmaps, self.depthmaps, hands_uvd = self.model(normalized_img, normalized_label_img, mask)[-1]
+        print("\n###\tShape of hands_uvd : ", np.shape(hands_uvd), "\n###\thands_uvd = ", hands_uvd)
         
         hands_uvd = recover_uvd(hands_uvd, box_size, com, cube_size)
 
