@@ -1,43 +1,33 @@
-# Pixel-wise Regression for 3D hand pose estimation 
-**PyTroch release of our paper:**   
-[Pixel-wise Regression: 3D Hand Pose Estimation via Spatial-form Representation and Differentiable Decoder](https://arxiv.org/abs/1905.02085)  
-*Xingyuan Zhang, Fuhai Zhang*
-
-If you find this repository useful, please make a reference in your paper:
-```
-@ARTICLE{zhang2022srnet,  
-    author={Zhang, Xingyuan and Zhang, Fuhai},  
-    journal={IEEE Transactions on Multimedia},   
-    title={Differentiable Spatial Regression: A Novel Method for 3D Hand Pose Estimation},   
-    year={2022},  
-    volume={24},  
-    number={},  
-    pages={166-176},  
-    doi={10.1109/TMM.2020.3047552}
-}
-```
-**Update:** The paper has been acceptted at [TMM](https://ieeexplore.ieee.org/document/9309323)! Title has changed as suggested by one of the reviewers. Please consider cite the new version. I did not upload the new version to Arxiv since I am not sure if it is allowed. If you know it is ok to do so, please contact me and I am glad to do the update.
+# Hands pose estimation on 3D camera using Pixel-wise Regression and Mediapipe Hands 
 
 ## Setup
-```
-conda env create -f env.yml
-conda activate pixelwise
-```
 
-## Dataset  
+### Nvidia things
+
+Install the GPU driver that suits your configuration [here](https://www.nvidia.fr/Download/index.aspx?lang=fr)\
+Then install CUDA 11.8 [here](https://developer.nvidia.com/cuda-11-8-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local)
+Finally install cuDNN, following these [steps](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html#install-linux) if you are on Linux and these [steps](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html#install-windows) if you are on Windows.
+
+### Python
+
+Install a [version](https://www.python.org/downloads/) of Python equal or higher than 3.7\
+Then install *pipenv* with this command : `pip install pipenv`\
+You can now clone this repository with this command : `git clone https://github.com/TheoCarme/PixelwiseRegression21Joints.git`\
+
+### ZED SDK
+
+[Download](https://www.stereolabs.com/developers/release/) the installer for ZED SDK 4.0 that suits your OS. Then install it.
+
+### Virtual environment
+
+## Dataset and Models
+
+If you intend to use test python program or to train the models yourself, then you will need to follow the following steps.
 All datasets should be placed in `./Data` folder. After placing datasets correctly, run `python check_dataset.py --dataset <dataset_name>` to build the data files used to train.
-
-### NYU  
-1. Download the dataset from [website](https://jonathantompson.github.io/NYU_Hand_Pose_Dataset.htm#download).
-2. Unzip the files to `./Data` and rename the folder as `NYU`.
 
 ### MSRA  
 1. Download the dataset from [dropbox](https://www.dropbox.com/s/bmx2w0zbnyghtp7/cvpr15_MSRAHandGestureDB.zip?dl=0).
 2. Unzip the files to `./Data` and rename the folder as `MSRA`.
-
-### ICVL  
-1. Download the dataset from [here](https://labicvl.github.io/hand.html).  
-2. Extract `Training.tar.gz` and `Testing.tar.gz` to `./Data/ICVL/Training` and `./Data/ICVL/Testing` respectively.
 
 ### HAND17  
 1. Ask for the permission from the [website](http://icvl.ee.ic.ac.uk/hands17/challenge/) and download.  
@@ -62,6 +52,11 @@ HAND17/
   |     |
   |     |-- BoundingBox.txt
 ```
+### Pretrained models
+
+You can also download the pretrained models [here](https://github.com/IcarusWizard/PixelwiseRegression/releases/tag/v1.0)
+You can either download *HAND17_default_final.pt* or *MSRA_models.tar.gz* and place them in `./Model`
+*MSRA_models.tar.gz* needs to be unzipped as it contains one model per subject in the dataset.
 
 ## Train  
 Run `python train.py --dataset <dataset_name>`, `dataset_name` can be chose from `NYU`, `ICVL` and `HAND17`.  
@@ -72,6 +67,3 @@ For `MSRA` dataset, you should run `python train_msra.py --subject <subject_id>`
 Run `python test.py --dataset <dataset_name>`.
 
 For `MSRA` dataset, you should run `python test_msra.py --subject <subject_id>`.
-
-## Results  
-Results and pretrained models are available in [github release](https://github.com/IcarusWizard/PixelwiseRegression/releases/tag/v1.0).
