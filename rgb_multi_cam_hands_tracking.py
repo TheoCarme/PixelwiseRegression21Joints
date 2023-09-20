@@ -1,27 +1,3 @@
-########################################################################
-#
-# Copyright (c) 2020, STEREOLABS.
-#
-# All rights reserved.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-########################################################################
-
-"""
-    Multi cameras sample showing how to open multiple ZED in one program
-"""
-
 import argparse
 import cv2 as cv
 import sys
@@ -56,6 +32,7 @@ stop_signal = False
 
 
 
+# Some of the arguments are not totally or not at all functional
 def make_parser():
     parser = argparse.ArgumentParser("hands tracking")    
     parser.add_argument(
@@ -115,32 +92,17 @@ def make_parser():
     return parser
 
 
-
-def get_point_cloud_of_hands(hands_landmarks, point_cloud, display=False) :
-
-    point_cloud_hands = np.full(np.shape(hands_landmarks), np.nan)
-
-    for idx_hands, hand_landmarks in enumerate(hands_landmarks) :
-        for idx_landmark, landmark in enumerate(hand_landmarks) :
-            x = landmark[0]
-            y = landmark[1]
-            a = round(x)
-            b = round(y)
-            if (a >= 0 and a < 1080) and (b >= 0 and b < 1920) :
-                point_cloud_hands[idx_hands, idx_landmark] = point_cloud[a, b, :3]
-
-            if display :
-                print("\n[GET POINTS CLOUD OF HANDS]\tidx_hands = ", idx_hands, "\tidx_landmark = ", idx_landmark, "\nhand_landmarks = ", hand_landmarks,
-                      "\n[GET POINTS CLOUD OF HANDS]\tx = ", x, "\ty = ", y, "\ta = ", a, "\tb = ", b,
-                      "\n[GET POINTS CLOUD OF HANDS]\tpoint_cloud[a, b, :3] = ", point_cloud[a, b, :3])
-    
-    if display :
-        print("\n[GET POINTS CLOUD OF HANDS]\tShape of point_cloud_hands : ", np.shape(point_cloud_hands), "\npoint_cloud_hands = ", point_cloud_hands)
-    
-    return point_cloud_hands
-
-
-
+########################################################################################################################
+# A function that given the points cloud from the ZED camera and the hands landmarks in the uvd format, will make a numpy
+# array containing the hands landmarks linked with the corresponding depth value.
+# Inputs :  - hands_landmarks is a numpy array that contains the landmarks of the tracked hands in the uvd format
+#           (u and v are the coordinates in the image and d is the relative depth to the wrist landmark)
+#           - depth_map is a numpy array that contains the depth values measured by the ZED camera.
+#           - display is a flag to set to "True" so that the function will print the intermediate steps and the final results
+#
+# Output  : - camera_hands_landmarks_pts is a numpy array that replaces the z value of hands_landmarks by the right depth value
+#           from depth_map.
+########################################################################################################################
 def get_points_of_landmarks_camera_z(hands_landmarks, depth_map, display=False) :
 
     camera_hands_landmarks_pts = np.full(np.shape(hands_landmarks), np.nan)
@@ -150,6 +112,7 @@ def get_points_of_landmarks_camera_z(hands_landmarks, depth_map, display=False) 
             y = landmark[1]
             a = round(x)
             b = round(y)
+            # Check that the landmark is in the frame and act accordingly
             if (a >= 0 and a < 1080) and (b >= 0 and b < 1920) :
                 z = depth_map[a, b]
                 camera_hands_landmarks_pts[idx_hands, idx_landmark] = [x, y, z]
