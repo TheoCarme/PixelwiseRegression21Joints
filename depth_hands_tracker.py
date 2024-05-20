@@ -10,6 +10,24 @@ import scipy
 from model import PixelwiseRegression
 from utils import load_model, select_gpus, center_crop, recover_uvd
 
+
+
+########################################################################################################################
+# A class to encapsulate PixelwiseRegression the model that estimate the pose of hands on an image.
+# Inputs :  - model_name is a string containing the filename of the model to be used.
+#           - model_parameters is a dictionary containing 7 parameters :
+#               - stage
+#               - label_size
+#               - features
+#               - level
+#               - norm_method
+#               - heatmap_method
+#           - focal_length is an array containing the two elements in millimeters of the focal legth of the camera used.
+#           - cube_size is a scalar that represents half the length of the side of the square.
+#           The default value of the models used should be 150 (mm). The best value generally is slightly larger
+#           than the size of the hand and depends on how good the segmentations are.
+#           - gpu_id is an integer to indicate which gpu to use. If there is only one gpu or none put it to 0.
+########################################################################################################################
 class Depth_Hands_Tracker():
     def __init__(self, model_name, model_parameters, focal_length, cube_size, gpu_id):
 
@@ -27,6 +45,19 @@ class Depth_Hands_Tracker():
 
 
 
+########################################################################################################################
+# A method that given a depth image of a close-up of an hand will compute all the necessary objects to run the model to
+# estimate the corrdinates of the hand joints.
+# Inputs :  - depth_hand_close_up is a close-up of a detected hands in the depth array
+#
+# Outputs : - normalized_img
+#           - normalized_label_img is 
+#           - mask is a tensor containing the mask which is equal to 0 when the label image is too and equal to 1 otherwise.
+#           - box_size is a tensor storing the shape of the cropped image before resizing.
+#           - cube_size is the same as the cube_size of the class but as a tensor.
+#           - com is a tensor storing 3 float : the two coordinates of the center of mass of the pixels of depth array which are
+#           superior to 0 and the mean depth of those pixels.
+########################################################################################################################
     def get_cropped_and_normalized_hands(self, depth_hand_close_up) :
 
         cube_size = self.cube_size
@@ -84,12 +115,19 @@ class Depth_Hands_Tracker():
         com = tr.from_numpy(com).float()
         
         return normalized_img, normalized_label_img, mask, box_size, cube_size, com
-            
 
 
-    def estimate(self, img):
+
+########################################################################################################################
+# A method that given a depth image of a hand close-up will estimate the 3D coordinates of the 21 joints composing the hand.
+# Inputs :  - depth_hand_close_up is a depth image of close-up of a hand.
+#
+# Outputs : - hands_uvd is a numpy array containing the 3D coordinates of the 21 joints composing the hand.
+########################################################################################################################
+    def estimate(self, depth_hand_close_up):
         
-        normalized_img, normalized_label_img, mask, box_size, cube_size, com = self.get_cropped_and_normalized_hands(img[0, 0])
+        # Get as tensors all the data needed for the estimation of the coordinates the hand joints.
+        normalized_img, normalized_label_img, mask, box_size, cube_size, com = self.get_cropped_and_normalized_hands(depth_hand_close_up[0, 0])
 
         print("\n###\tShape of normalized_img : ", np.shape(normalized_img), "\tshape of normalized_label_img : ",\
               np.shape(normalized_label_img), "\tshape of mask : ", np.shape(mask))
@@ -102,9 +140,11 @@ class Depth_Hands_Tracker():
               "\n###\tmemory_reserved = ", tr.cuda.memory_reserved(),\
               "\n###\tmax_memory_reserved = ", tr.cuda.max_memory_reserved())
 
+        # Run the model to estimate the hand joints coordinates.
         self.heatmaps, self.depthmaps, hands_uvd = self.model(normalized_img, normalized_label_img, mask)[-1]
         print("\n###\tShape of hands_uvd : ", np.shape(hands_uvd), "\n###\thands_uvd = ", hands_uvd)
         
+        # Recalculate the coodrinates of the hand joints so that they corresponds the close-up image given as parameter.
         hands_uvd = recover_uvd(hands_uvd, box_size, com, cube_size)
 
         hands_uvd = hands_uvd.detach().cpu().numpy()
